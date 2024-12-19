@@ -72,7 +72,7 @@ t0 = datetime.datetime.now()
 T0 = time.process_time()
 print("TSTAMP 0 : " + str(t0))
 
-DIRPATH = '/prj0134/ResearchData/simonsonlab/scratch/deidentified_FCS_files/Deidentified on 2023-10-25 15:57:25, CLL MRD files 2020-2021/'
+DIRPATH = ''
 
 ann = pd.read_csv(DIRPATH + "annotation.csv", sep="\t")
 print(ann.shape)
@@ -106,8 +106,7 @@ for fold_i, (xid_train, xid_test) in enumerate(kf.split(fcs_files, y_true)):
     f_test = fcs_files[xid_test]
     y_train = y_true[xid_train]
     y_test = y_true[xid_test]
-    #M = 1000000
-    M = 1000
+    M = 1000000 # sample 1 million cells
     with open("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/dat.obj", "wb") as f:
         pickle.dump([xid_train, xid_test, M], f)
     m = int(M/len(f_train))
@@ -134,7 +133,7 @@ for fold_i, (xid_train, xid_test) in enumerate(kf.split(fcs_files, y_true)):
     print("TSTAMP 2 : " + str(t2))
     print("time elapsed: " + str(t2-t1))
     print("process time elapsed: " + str(T2-T1))
-    # save U, V, embedder so you can reload later if needed
+    # save
     np.save("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/U.npy", U)
     np.save("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/V.npy", V)
     print("projections..")
@@ -146,10 +145,10 @@ for fold_i, (xid_train, xid_test) in enumerate(kf.split(fcs_files, y_true)):
         return 1
 
     w_list = []
-    for i in range(len(fcs_files)):
-        w_list.append(process_case_umap(fcs_files[i]))
-    #with multiprocessing.Pool() as pool:
-    #    w_list = pool.map(process_case_umap, fcs_files[0:2])
+    #for i in range(len(fcs_files)):
+    #    w_list.append(process_case_umap(fcs_files[i]))
+    with multiprocessing.Pool() as pool:
+        w_list = pool.map(process_case_umap, fcs_files[0:2])
     print(sum(w_list))
     print('done [FOLD]')
 

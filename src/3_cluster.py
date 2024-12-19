@@ -87,9 +87,9 @@ def get_RF_params(x_train, y_train):
 
 ## ---------------------------------------------------------------------
 
-DIRPATH = '/prj0134/ResearchData/simonsonlab/scratch/deidentified_FCS_files/Deidentified on 2023-10-25 15:57:25, CLL MRD files 2020-2021/'
-RUN_2 = '20241208183323'
-fold_i = 0
+DIRPATH = ''
+RUN_2 = '' # provide RUN_ID from running 2_UMAP.py
+fold_i = 0 # provide fold to process
 
 ## ---------------------------------------------------------------------
 
@@ -129,6 +129,7 @@ print(pd.value_counts(y_true[xid_test]))
 y_train = y_true[xid_train]
 y_test = y_true[xid_test]
 
+# set number of clusters for k-means
 nclust = 1000
 
 U = np.load('./obj/2/' + RUN_2 + '/' + str(fold_i) + "/U.npy")
