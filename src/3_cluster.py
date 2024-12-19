@@ -26,10 +26,12 @@ from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import Lasso
 import multiprocessing
 #import hdbscan
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
 
 ## ============================================================
 
-## load UMAP projections, apply clustering and run RF
+## load UMAP projections, apply clustering and run RF, regression
 
 ## ============================================================
 
@@ -84,6 +86,24 @@ def get_RF_params(x_train, y_train):
     param = param_list[np.argmax(res_list)]
     return param
 
+def get_RF_regression_params(x_train, y_train):
+    kf = sklearn.model_selection.StratifiedKFold(n_splits=2)
+    qs = np.quantile(y_train, [0, 0.2, 0.4, 0.6, 0.8, 1])
+    h_train = np.digitize(y_train, qs)
+    i, (xid_train, xid_test) = list(enumerate(kf.split(x_train, h_train)))[0]
+    y_1 = y_train[xid_train]
+    y_2 = y_train[xid_test]
+    est_list = [10, 20, 50, 100, 200, 500]
+    leaf_list = [10, 20, 50, 100, 200, 500]
+    param_list = list(itertools.product(est_list, leaf_list))
+    res_list = []
+    for j in range(len(param_list)):
+        R = RandomForestRegressor(n_estimators=param_list[j][0], max_leaf_nodes=param_list[j][1], n_jobs=-1, verbose=0, random_state=1)
+        R.fit(x_train[xid_train, :], y_train[xid_train])
+        y_pred = R.predict(x_train[xid_test, :])
+        res_list.append(sklearn.metrics.mean_squared_error(y_2, y_pred))
+    param = param_list[np.argmin(res_list)]
+    return param
 
 ## ---------------------------------------------------------------------
 
@@ -128,6 +148,9 @@ print(pd.value_counts(y_true[xid_test]))
 
 y_train = y_true[xid_train]
 y_test = y_true[xid_test]
+
+perc_train = perc_true[xid_train]
+perc_test = perc_true[xid_test]
 
 # set number of clusters for k-means
 nclust = 1000
@@ -217,9 +240,31 @@ print("TSTAMP 4 : " + str(t4))
 print("time elapsed: " + str(t4-t3))
 print("process time elapsed: " + str(T4-T3))
 
+params = get_RF_regression_params(Z_train, perc_train)
+print(params)
+RR = RandomForestRegressor(n_estimators=params[0], max_leaf_nodes=params[1], random_state=1)
+RR.fit(Z_train, perc_train)
+perc_pred_train = RR.predict(Z_train)
+perc_pred_test = RR.predict(Z_test)
+mse_train = mean_squared_error(perc_train, perc_pred_train)
+mse_test = mean_squared_error(perc_test, perc_pred_test)
+r2_train = r2_score(perc_train, perc_pred_train)
+r2_test = r2_score(perc_test, perc_pred_test)
+print("MSE train: " + str(round(mse_train, 4)))
+print("MSE test: " + str(round(mse_test, 4)))
+print("R^2 train: " + str(round(r2_train, 3)))
+print("R^2 test: " + str(round(r2_test, 3)))
+
+t5 = datetime.datetime.now()
+T5 = time.process_time()
+print("TSTAMP 5 : " + str(t5))
+print("time elapsed: " + str(t5-t4))
+print("process time elapsed: " + str(T5-T4))
+
 print("-------- end of fold ----------")
-print("total time elapsed: " + str(t4-t0))
-print("total process time elapsed: " + str(T4-T0))
+print("total time elapsed: " + str(t5-t0))
+print("total process time elapsed: " + str(T5-T0))
+
 
 
 
