@@ -33,7 +33,7 @@ RUN_ID = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 print(RUN_ID)
 
 if not os.path.exists('./log'):
-    os.makrdirs('./log')
+    os.makedirs('./log')
 
 class Logger(object):
     def __init__(self):
