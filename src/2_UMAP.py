@@ -18,6 +18,7 @@ import umap
 import multiprocessing
 import sklearn.model_selection
 from sklearn import preprocessing
+import configparser
 
 ## ============================================================
 
@@ -30,6 +31,9 @@ random.seed(1)
 RUN_ID = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
 print(RUN_ID)
+
+if not os.path.exists('./log'):
+    os.makrdirs('./log')
 
 class Logger(object):
     def __init__(self):
@@ -72,10 +76,24 @@ t0 = datetime.datetime.now()
 T0 = time.process_time()
 print("TSTAMP 0 : " + str(t0))
 
-DIRPATH = ''
+config = configparser.ConfigParser()
+config.read('../settings.ini')
+
+if config.has_option('DEFAULT', 'dirpath'):
+    DIRPATH = config.get('DEFAULT', 'dirpath')
+else:
+    DIRPATH = '' # insert path here
+
+num_folds = 3
+if config.has_option('DEFAULT', 'K'):
+    num_folds = config.getint('DEFAULT', 'K')
+
+M = 1000000
+if config.has_option('DEFAULT', 'M'):
+    M = config.getint('DEFAULT', 'M')
 
 ann = pd.read_csv(DIRPATH + "annotation.csv", sep="\t")
-print(ann.shape)
+print(str(ann.shape[0]) + ' cases available')
 
 sel_pns = pd.value_counts(ann['PNS']).index.tolist()[0]
 sel_ix = np.where(ann['PNS'] == sel_pns)[0]
@@ -88,25 +106,33 @@ y_true = np.asarray(sel_ann.iloc[xid_sel]['Diagnosis'])
 perc_true = np.asarray(sel_ann.iloc[xid_sel]['Percentage'])
 le = preprocessing.LabelEncoder()
 le.fit(y_true)
+
 print(perc_true.shape)
 print(y_true.shape)
 
 fcs_files = sel_ann.iloc[xid_sel]['New File Name']
 fcs_files = fcs_files.to_numpy()
 
-kf = sklearn.model_selection.StratifiedKFold(n_splits=3)
+kf = sklearn.model_selection.StratifiedKFold(n_splits=num_folds)
 
+# create directory for this run
+if not os.path.exists('./obj/2'):
+    os.makedirs('./obj/2')
 os.makedirs("./obj/2/" + RUN_ID)
 
+# start k-folds
 for fold_i, (xid_train, xid_test) in enumerate(kf.split(fcs_files, y_true)):
+    t1 = datetime.datetime.now()
+    T1 = time.process_time()
     print('---------------- FOLD ' + str(fold_i) + '----------------')
+    print("TSTAMP 1 : " + str(t1))
     os.makedirs("./obj/2/" + RUN_ID + "/" + str(fold_i))
     os.makedirs("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/projections")
     f_train = fcs_files[xid_train]
     f_test = fcs_files[xid_test]
     y_train = y_true[xid_train]
     y_test = y_true[xid_test]
-    M = 1000000 # sample 1 million cells
+    # sample M cells
     with open("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/dat.obj", "wb") as f:
         pickle.dump([xid_train, xid_test, M], f)
     m = int(M/len(f_train))
@@ -118,39 +144,56 @@ for fold_i, (xid_train, xid_test) in enumerate(kf.split(fcs_files, y_true)):
         Ui_list.append(Xi[random.sample(range(Xi.shape[0]), min(m, Xi.shape[0])), :])
     U = np.concatenate(Ui_list)
     print(U.shape)
-    t1 = datetime.datetime.now()
-    T1 = time.process_time()
-    print("TSTAMP 1 : " + str(t1))
-    print("time elapsed: " + str(t1-t0))
-    print("process time elapsed: " + str(T1-T0))
+    t2 = datetime.datetime.now()
+    T2 = time.process_time()
+    print("TSTAMP 2 : " + str(t2))
+    print("time elapsed: " + str( round((t2-t1).total_seconds(), 5) ))
+    print("process time elapsed: " + str(round(T2-T1, 5)))
     print('UMAP...')
     embedder = umap.UMAP() #min_dist=min_dist, n_neighbors=n_neighbors, metric=metric)
     embedding = embedder.fit(U)
     V = embedder.embedding_
     print(V.shape)
-    t2 = datetime.datetime.now()
-    T2 = time.process_time()
-    print("TSTAMP 2 : " + str(t2))
-    print("time elapsed: " + str(t2-t1))
-    print("process time elapsed: " + str(T2-T1))
+    t3 = datetime.datetime.now()
+    T3 = time.process_time()
+    print("TSTAMP 3 : " + str(t3))
+    print("time elapsed: " + str( round((t3-t2).total_seconds(), 5) ))
+    print("process time elapsed: " + str(round(T3-T2, 5)))
     # save
     np.save("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/U.npy", U)
     np.save("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/V.npy", V)
     print("projections..")
     def process_case_umap(f):
+        tf0 = time.process_time()
         Xi = get_fcsdata(DIRPATH + f)
         Xi = Xi[range(100), :]
         Vi = embedder.transform(Xi)
         np.save("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/projections/" + f + ".npy", Vi)
-        return 1
+        tf1 = time.process_time()
+        return tf1-tf0
 
     w_list = []
     #for i in range(len(fcs_files)):
     #    w_list.append(process_case_umap(fcs_files[i]))
     with multiprocessing.Pool() as pool:
-        w_list = pool.map(process_case_umap, fcs_files[0:2])
-    print(sum(w_list))
+        w_list = pool.map(process_case_umap, fcs_files[0:5])
+    print('threads completed:' + str(length(w_list)))
+    print("process time elapsed within threads: " + str(round(sum(w_list), 5)))
+    t4 = datetime.datetime.now()
+    T4 = time.process_time()
+    print("TSTAMP 4 : " + str(t4))
+    print("time elapsed: " + str( round((t4-t3).total_seconds(), 5) ))
+    print("process time elapsed: " + str(round(T4-T3, 5)))
     print('done [FOLD]')
+    print("time elapsed [FOLD]: " + str( round((t4-t1).total_seconds(), 5) ))
+    print("process time elapsed [FOLD]: " + str(round(T4-T1, 5)))
+
+
+t5 = datetime.datetime.now()
+T5 = time.process_time()
+print("TSTAMP 5 : " + str(t5))
+print("time elapsed [TOTAL]: " + str( round((t5-t0).total_seconds(), 5) ))
+print("process time elapsed [TOTAL]: " + str(round(T5-T0, 5)))
 
 print('done.')
 
