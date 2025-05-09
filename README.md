@@ -1,6 +1,8 @@
-# CLL_MRD
+## CLL_MRD
 
-Code repository for manuscript "Automated CLL cell cluster detection using a weakly supervised approach and CLL MRD flow cytometry data"
+## Code repository for manuscript "Automated CLL cell cluster detection using a weakly supervised approach and CLL MRD flow cytometry data"
+
+![diagram1](https://github.com/user-attachments/assets/1a834b9b-0446-4c57-a637-e6fbc9392fa8)
 
 Wikum Dinalankara, Luigi Marchionni, Paul D. Simonson
 
@@ -15,3 +17,4 @@ Notes for running:
 (2) Run 2_UMAP.py first to create the UMAP and the case projections (set the number of cells to be sample if necessary, default = 1000000). This will create a folder in ./obj with a RUN ID.
 
 (3) Run 3_cluster.py after setting the RUN ID from (2) inside the script to perform classification and regression corresponding to the UMAP projections obtained. Set the number of clusters to be estimated by k-means if necessary (default=1000).
+
