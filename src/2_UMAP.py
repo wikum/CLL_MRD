@@ -1,13 +1,18 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+## ------------------
+## 2025-05-20
+## Wikum Dinalankara
+## ------------------
+
 import sys
 import time
 import datetime
-import fcsparser
+import fcsparser #
 import math
 import numpy as np
-import pandas as pd
+import pandas as pd #
 import statistics
 import pickle
 import os
@@ -19,10 +24,11 @@ import multiprocessing
 import sklearn.model_selection
 from sklearn import preprocessing
 import configparser
+import re
 
 ## ============================================================
 
-## prepare UMAP + projections
+## prepare UMAP
 
 ## ============================================================
 
@@ -61,14 +67,27 @@ def intersection(lst1, lst2):
 def col_standardize(x):
     return x/np.max(x)
 
-def get_fcsdata(f):
+def get_fcsdata(f, omit_singlets=False, omit_doublets=False):
     meta, fcsdat = fcsparser.parse(f, reformat_meta=True)
     # omit time
     H = fcsdat.iloc[:, range(1, fcsdat.shape[1])]
     H = H.to_numpy()
     H[H < 0] = 0
+    if omit_doublets:
+        H = remove_doublets(H)
+    if omit_singlets:
+        H = remove_singlets(H)
     H =  np.log(H + 1)
     return H
+
+def write_xid_train_test(xid_train, xid_test, file):
+    u1 = pd.DataFrame(zip(xid_train, ['train' for i in range(xid_train.shape[0])]))
+    u1.columns = ['id', 'set']
+    u2 = pd.DataFrame(zip(xid_test, ['test' for i in range(xid_test.shape[0])]))
+    u2.columns = ['id', 'set']
+    u = pd.concat([u1, u2])
+    u.to_csv(file)
+
 
 ## ---------------------------------------------------------------------
 
@@ -91,6 +110,7 @@ if config.has_option('DEFAULT', 'K'):
 M = 1000000
 if config.has_option('DEFAULT', 'M'):
     M = config.getint('DEFAULT', 'M')
+#M = 1000
 
 ann = pd.read_csv(DIRPATH + "annotation.csv", sep="\t")
 print(str(ann.shape[0]) + ' cases available')
@@ -122,19 +142,26 @@ os.makedirs("./obj/2/" + RUN_ID)
 
 # start k-folds
 for fold_i, (xid_train, xid_test) in enumerate(kf.split(fcs_files, y_true)):
-    t1 = datetime.datetime.now()
-    T1 = time.process_time()
-    print('---------------- FOLD ' + str(fold_i) + '----------------')
-    print("TSTAMP 1 : " + str(t1))
     os.makedirs("./obj/2/" + RUN_ID + "/" + str(fold_i))
     os.makedirs("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/projections")
+    with open("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/dat.obj", "wb") as f:
+        pickle.dump([xid_train, xid_test, M], f)
+    write_xid_train_test(xid_train=xid_train, xid_test=xid_test, file="./obj/2/" + RUN_ID + "/" + str(fold_i) + "/xid.txt")
+
+
+## generate umap
+def gen_UMAP(fold_i, omit_singlets=False, omit_doublets=False, omit_lowCD19=False):
+    t1 = datetime.datetime.now()
+    T1 = time.process_time()
+    print('---------------- FOLD ' + str(fold_i) + ' [UMAP] ----------------')
+    print("TSTAMP 1 : " + str(t1))
+    with open("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/dat.obj", "rb") as f:
+        xid_train, xid_test, M = pickle.load(f)
     f_train = fcs_files[xid_train]
     f_test = fcs_files[xid_test]
     y_train = y_true[xid_train]
     y_test = y_true[xid_test]
     # sample M cells
-    with open("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/dat.obj", "wb") as f:
-        pickle.dump([xid_train, xid_test, M], f)
     m = int(M/len(f_train))
     print('sampling...')
     Ui_list = []
@@ -143,6 +170,23 @@ for fold_i, (xid_train, xid_test) in enumerate(kf.split(fcs_files, y_true)):
         random.seed(1)
         Ui_list.append(Xi[random.sample(range(Xi.shape[0]), min(m, Xi.shape[0])), :])
     U = np.concatenate(Ui_list)
+    print(U.shape)
+    # remove non-viable cells, singlets
+    if omit_singlets:
+        print("removing cells based on viability dye")
+        U = U[np.where(U[:, 9] <= np.log(50000))[0], :]
+    fsratio = np.exp(U[:, 0] - U[:, 1])
+    cutoff = fsratio.mean() + 2 * fsratio.std()
+    if omit_doublets:
+        print("removing cells based on viability dye, fsc-a/fsc-h ratio")
+        U = U[np.where(fsratio <= cutoff)[0], :]
+    print(U.shape)
+    # remove CD19 < 3 (in log space)
+    # update: remove CD19 < 8
+    if omit_lowCD19:
+        print("removing low CD19")
+        print("using 8 as CD19 cutoff")
+        U = U[np.where(U[:, 7] > 8)[0], :]
     print(U.shape)
     t2 = datetime.datetime.now()
     T2 = time.process_time()
@@ -154,63 +198,49 @@ for fold_i, (xid_train, xid_test) in enumerate(kf.split(fcs_files, y_true)):
     embedding = embedder.fit(U)
     V = embedder.embedding_
     print(V.shape)
+    # save
+    np.save("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/U.npy", U)
+    np.save("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/V.npy", V)
+    with open("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/embedder.obj", "wb") as f:
+        pickle.dump(embedder, f)
     t3 = datetime.datetime.now()
     T3 = time.process_time()
     print("TSTAMP 3 : " + str(t3))
     print("time elapsed: " + str( round((t3-t2).total_seconds(), 5) ))
     print("process time elapsed: " + str(round(T3-T2, 5)))
-    # save
-    np.save("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/U.npy", U)
-    np.save("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/V.npy", V)
-    print("projections..")
-    def process_case_umap(f):
-        tf0 = time.process_time()
-        Xi = get_fcsdata(DIRPATH + f)
-        Xi = Xi[range(100), :]
-        Vi = embedder.transform(Xi)
-        np.save("./obj/2/" + RUN_ID + "/" + str(fold_i) + "/projections/" + f + ".npy", Vi)
-        tf1 = time.process_time()
-        return tf1-tf0
+    return fold_i
 
-    w_list = []
-    #for i in range(len(fcs_files)):
-    #    w_list.append(process_case_umap(fcs_files[i]))
-    with multiprocessing.Pool() as pool:
-        w_list = pool.map(process_case_umap, fcs_files[0:5])
-    print('threads completed:' + str(length(w_list)))
-    print("process time elapsed within threads: " + str(round(sum(w_list), 5)))
-    t4 = datetime.datetime.now()
-    T4 = time.process_time()
-    print("TSTAMP 4 : " + str(t4))
-    print("time elapsed: " + str( round((t4-t3).total_seconds(), 5) ))
-    print("process time elapsed: " + str(round(T4-T3, 5)))
-    print('done [FOLD]')
-    print("time elapsed [FOLD]: " + str( round((t4-t1).total_seconds(), 5) ))
-    print("process time elapsed [FOLD]: " + str(round(T4-T1, 5)))
+# --
+t4 = datetime.datetime.now()
+T4 = time.process_time()
+print("TSTAMP 4 : " + str(t4))
 
+gen_UMAP(0)
 
 t5 = datetime.datetime.now()
 T5 = time.process_time()
 print("TSTAMP 5 : " + str(t5))
-print("time elapsed [TOTAL]: " + str( round((t5-t0).total_seconds(), 5) ))
-print("process time elapsed [TOTAL]: " + str(round(T5-T0, 5)))
+print("time elapsed: " + str( round((t5-t4).total_seconds(), 5) ))
+print("process time elapsed: " + str(round(T5-T4, 5)))
+
+gen_UMAP(1)
+
+t6 = datetime.datetime.now()
+T6 = time.process_time()
+print("TSTAMP 6 : " + str(t6))
+print("time elapsed: " + str( round((t6-t5).total_seconds(), 5) ))
+print("process time elapsed: " + str(round(T6-T5, 5)))
+
+gen_UMAP(2)
+
+t6 = datetime.datetime.now()
+T6 = time.process_time()
+print("TSTAMP 6 : " + str(t6))
+print("time elapsed: " + str( round((t6-t5).total_seconds(), 5) ))
+print("process time elapsed: " + str(round(T6-T5, 5)))
+
+print("time elapsed [TOTAL]: " + str( round((t6-t0).total_seconds(), 5) ))
+print("process time elapsed [TOTAL]: " + str(round(T6-T0, 5)))
 
 print('done.')
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#
