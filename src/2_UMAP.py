@@ -54,9 +54,6 @@ class Logger(object):
         self.log.write(message)
 
     def flush(self):
-        # this flush method is needed for python 3 compatibility.
-        # this handles the flush command by doing nothing.
-        # you might want to specify some extra behavior here.
         pass
 
 sys.stdout = Logger()
@@ -215,6 +212,7 @@ t4 = datetime.datetime.now()
 T4 = time.process_time()
 print("TSTAMP 4 : " + str(t4))
 
+# generate umap for fold 1
 gen_UMAP(0)
 
 t5 = datetime.datetime.now()
@@ -223,6 +221,7 @@ print("TSTAMP 5 : " + str(t5))
 print("time elapsed: " + str( round((t5-t4).total_seconds(), 5) ))
 print("process time elapsed: " + str(round(T5-T4, 5)))
 
+# generate umap for fold 2
 gen_UMAP(1)
 
 t6 = datetime.datetime.now()
@@ -231,6 +230,7 @@ print("TSTAMP 6 : " + str(t6))
 print("time elapsed: " + str( round((t6-t5).total_seconds(), 5) ))
 print("process time elapsed: " + str(round(T6-T5, 5)))
 
+# generate umap for fold 3
 gen_UMAP(2)
 
 t6 = datetime.datetime.now()
