@@ -4,7 +4,7 @@
 
 ![diagram1](https://github.com/user-attachments/assets/1a834b9b-0446-4c57-a637-e6fbc9392fa8)
 
-Wikum Dinalankara, Luigi Marchionni, Paul D. Simonson
+Wikum Dinalankara, Chandler Sy, Jiani Chai, Paul B. Barone, Luigi Marchionni, and Paul D. Simonson
 
 Abstract
 
@@ -12,9 +12,13 @@ Minimal residual disease detection is routinely performed as part of post-diagno
 
 Notes for running:
 
-(1) For each python script, set the DIRPATH variable to the folder corresonding to the fcs files and annotation table.
+(1) Set the DIRPATH variable in settings.ini to the folder corresonding to the fcs files and annotation table. Set K to be the number of folds to be generated for cross validation and M to the number of cells to sample.
 
-(2) Run 2_UMAP.py first to create the UMAP and the case projections (set the number of cells to be sample if necessary, default = 1000000). This will create a folder in ./obj with a RUN ID.
+(2) Run 2_UMAP.py first to create the UMAP and the case projections (set the number of cells to be sample if necessary through settings.ini or manually in code; default = 1000000). This will create a folder in ./obj with a RUN ID.
 
-(3) Run 3_cluster.py after setting the RUN ID from (2) inside the script to perform classification and regression corresponding to the UMAP projections obtained. Set the number of clusters to be estimated by k-means if necessary (default=1000).
+(3) Run 3_projections.py after setting the RUN ID from (2) inside the script to generate UMAP projections for each fold.
+
+(4) Run 4_cluster.py to run clustering for each fold after setting the RUN ID from (2). This will generate cluster labels for each cell and aggregate them into a numpy matrix. 
+
+(5) Perform classification and regression. (Note: this section of the code will be completed upon publication.)
 
