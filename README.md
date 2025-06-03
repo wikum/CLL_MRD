@@ -20,5 +20,5 @@ Notes for running:
 
 (4) Run 4_cluster.py to run clustering for each fold after setting the RUN ID from (2). This will generate cluster labels for each cell and aggregate them into a numpy matrix. 
 
-(5) Perform classification and regression. (Note: this section of the code will be completed upon publication.)
+(5) Perform classification, regression, and clusters of interest discovery. (Note: this section of the code will be completed upon publication.)
 
